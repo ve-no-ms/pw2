@@ -13,6 +13,9 @@ Blackbox allows several users to be authorized to encrypt and decrypt secrets.
 Using git to store passwords has a number of benefits such as logging,
 revision management and conflict resolution.
 
+GPG is also great because you can use your pre-existing keys, subkeys, smarcards,
+Yubikeys and all that wonderful stuff.
+
 In the past, I used Keepass to manage my passwords, and either tunneled access
 through SSH or copied the database to multiple computers. This caused problems
 when I made changes on two computers, I'd need to edit the password database
