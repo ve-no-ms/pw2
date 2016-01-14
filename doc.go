@@ -30,5 +30,11 @@ Using this software
 Pw2 can be used in two different ways: the first is importing the subpackage pkg/pw2
 and using its http.Handler, binding it to some route on your existing Go server,
 the second is running cmd/pw2, which runs a Go http server with some configurable flags.
+
+Web Interface
+
+Most mobiles these days can't download git repos. As a result, if so configured, PW2 will generate a GPG key for your server and encrypt it with a master password. This key will be added as an admin in the blackbox system, and used to enable the web interface.
+
+
 */
 package pw2

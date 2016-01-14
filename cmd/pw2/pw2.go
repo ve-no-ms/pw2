@@ -10,15 +10,20 @@ import (
 	"flag"
 	"fmt"
 	"reflect"
+	"syscall"
 
-	"github.com/Zemnmez/pw2/pkg/pw2"
+	"golang.org/x/crypto/ssh/terminal"
+
 	"github.com/golang/glog"
 	"github.com/libgit2/git2go"
+	"github.com/venoms/pw2/pkg/pw2"
 )
 
 const repoDir = "git"
 
 var httpAddr string
+
+var webInterface bool
 
 func init() {
 	flag.StringVar(
@@ -27,6 +32,15 @@ func init() {
 		":http",
 		`The address to bind the http server to eg: ":http", "127.0.0.1:8080"`,
 	)
+
+	flag.BoolVar(
+		&webInterface,
+		"webinterface",
+		true,
+		"Runs PW2 with the web based password manager (as opposed to git only). "+
+			"If PW2 is creating the repo for the first time, it will generate an associated GPG key for the "+
+			"web interface user and mark it as admin in blackbox.",
+	)
 }
 
 func do() (err error) {
@@ -34,7 +48,46 @@ func do() (err error) {
 	if db, err = pw2.Open(repoDir); err != nil {
 		if pw2.DatabaseNotFound(err) {
 			glog.Info("Database did not exist, creating...")
-			db, err = pw2.Create(repoDir)
+			var pw string
+			if webInterface {
+				for pw == "" {
+					glog.Info("Web interface enabled, prompting for GPG passphrase...")
+
+					fmt.Print("Web interface enabled, enter passphrase to use: ")
+
+					var pwB []byte
+					pwB, err = terminal.ReadPassword(int(syscall.Stdin))
+					if err != nil {
+						return
+					}
+
+					pw = string(pwB)
+
+					fmt.Print("\nRepeat that: ")
+
+					pwB, err = terminal.ReadPassword(int(syscall.Stdin))
+					if err != nil {
+						return
+					}
+
+					fmt.Println()
+
+					if pw != string(pwB) {
+						pw = ""
+						glog.Info("Passwords did not match.")
+						fmt.Println("Passwords did not match.")
+					}
+				}
+			}
+
+			db, err = pw2.Create(repoDir, pw)
+
+			if err != nil {
+				return
+			}
+
+			glog.Info("Creation completed")
+
 		}
 		return
 	}
