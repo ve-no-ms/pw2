@@ -9,13 +9,13 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"os"
 	"reflect"
 	"syscall"
 
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/golang/glog"
-	"github.com/libgit2/git2go"
 	"github.com/venoms/pw2/pkg/pw2"
 )
 
@@ -43,52 +43,61 @@ func init() {
 	)
 }
 
+func getPassword(prompt string) (pw []byte, err error) {
+	for len(pw) == 0 {
+		fmt.Print(prompt)
+
+		pw, err = terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return
+		}
+
+		fmt.Print("\nRepeat that: ")
+
+		var pwB []byte
+		pwB, err = terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return
+		}
+
+		fmt.Println()
+
+		if !bytes.Equal(pw, pwB) {
+			pw = nil
+			glog.Info("Passwords did not match.")
+			fmt.Println("Passwords did not match.")
+		}
+	}
+
+	return
+}
+
 func do() (err error) {
 	var db pw2.Database
-	if db, err = pw2.Open(repoDir); err != nil {
-		if pw2.DatabaseNotFound(err) {
-			glog.Info("Database did not exist, creating...")
-			var pw string
-			if webInterface {
-				for pw == "" {
-					glog.Info("Web interface enabled, prompting for GPG passphrase...")
 
-					fmt.Print("Web interface enabled, enter passphrase to use: ")
+	if _, err = os.Stat(repoDir); os.IsNotExist(err) {
+		glog.Info("Database did not exist, creating...")
 
-					var pwB []byte
-					pwB, err = terminal.ReadPassword(int(syscall.Stdin))
-					if err != nil {
-						return
-					}
-
-					pw = string(pwB)
-
-					fmt.Print("\nRepeat that: ")
-
-					pwB, err = terminal.ReadPassword(int(syscall.Stdin))
-					if err != nil {
-						return
-					}
-
-					fmt.Println()
-
-					if pw != string(pwB) {
-						pw = ""
-						glog.Info("Passwords did not match.")
-						fmt.Println("Passwords did not match.")
-					}
-				}
-			}
-
-			db, err = pw2.Create(repoDir, pw)
-
-			if err != nil {
+		var password []byte
+		if webInterface {
+			if password, err = getPassword("Web interface enabled, enter passphrase to use: "); err != nil {
 				return
 			}
-
-			glog.Info("Creation completed")
-
 		}
+
+		glog.Info("Web interface enabled, prompting for GPG passphrase...")
+
+		if db, err = pw2.Create(repoDir, password); err != nil {
+			return
+		}
+
+		glog.Info("Creation completed")
+
+		return
+
+	}
+
+	if db, err = pw2.Open(repoDir); err != nil {
 		return
 	}
 
@@ -103,30 +112,8 @@ func main() {
 	if err := do(); err != nil {
 		var buf bytes.Buffer
 		switch v := err.(type) {
-		case *git.GitError:
-			var strCode, strClass string
-
-			var ok bool
-			if strCode, ok = gitErrorClassNames[v.Class]; !ok {
-				strCode = fmt.Sprintf("#%v", v.Class)
-			}
-
-			if strClass, ok = gitErrorCodeNames[v.Code]; !ok {
-				strClass = fmt.Sprintf("#%v", v.Code)
-			}
-
-			fmt.Fprintf(
-				&buf,
-				`Fatal git error:
-	Code: %s
-	Class: %s
-	Message: %s`,
-				strCode,
-				strClass,
-				v.Message,
-			)
-
 		default:
+			_ = v
 			fmt.Fprintf(&buf, "Fatal error: %+q %s", err, reflect.TypeOf(err))
 		}
 		glog.Fatal(buf.String())
